@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Phaser Platformer with Trap</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.js"></script>
+    <style>
+        body {
+            margin: 0;
+        }
+
+        canvas {
+            display: block;
+            margin: 0 auto;
+            background: #87ceeb;
+            /* sky blue */
+        }
+    </style>
+</head>
+
+<body>
+
+    <script>
+        const config = {
+            type: Phaser.AUTO,
+            width: 800,
+            height: 400,
+            physics: {
+                default: 'arcade',
+                arcade: {
+                    gravity: { y: 600 },
+                    debug: false
+                }
+            },
+            scene: {
+                preload,
+                create,
+                update
+            }
+        };
+        let groundHeight = 380; // 380
+        let playerBase = 330; // 330;
+
+        let player, cursors, door;
+        let obstacles, followers;
+        let honeyTrapZone;
+        let trapTriggered = false;
+        let waterFill;
+
+
+        const leftDoorMinX = 50;
+        const leftDoorMaxX = 150;
+        const rightDoorMinX = 700;
+        const rightDoorMaxX = 780;
+        const doorY = 330; // fixed y-position as before
+
+        const minDistance = 150;
+
+
+        function getRandomDoorPosition(playerX, playerY, minDistance, attempts = 50) {
+            let spawnZoneXMin, spawnZoneXMax;
+
+            // If player is close to right edge (say > 650), spawn door on left zone
+            if (playerX > 650) {
+                spawnZoneXMin = leftDoorMinX;
+                spawnZoneXMax = leftDoorMaxX;
+            }
+            // If player is close to left edge (say < 150), spawn door on right zone
+            else if (playerX < 150) {
+                spawnZoneXMin = rightDoorMinX;
+                spawnZoneXMax = rightDoorMaxX;
+            }
+            // Else pick the zone that is farthest from player
+            else {
+                // Choose side farthest from player
+                const distToLeft = Math.abs(playerX - ((leftDoorMinX + leftDoorMaxX) / 2));
+                const distToRight = Math.abs(playerX - ((rightDoorMinX + rightDoorMaxX) / 2));
+                if (distToLeft > distToRight) {
+                    spawnZoneXMin = leftDoorMinX;
+                    spawnZoneXMax = leftDoorMaxX;
+                } else {
+                    spawnZoneXMin = rightDoorMinX;
+                    spawnZoneXMax = rightDoorMaxX;
+                }
+            }
+
+            // Try to find position in spawn zone with enough distance
+            for (let i = 0; i < attempts; i++) {
+                const randomX = Phaser.Math.Between(spawnZoneXMin, spawnZoneXMax);
+                const distance = Phaser.Math.Distance.Between(playerX, playerY, randomX, doorY);
+                if (distance >= minDistance) {
+                    return { x: randomX, y: doorY };
+                }
+            }
+
+            // fallback if none found
+            return { x: spawnZoneXMin, y: doorY };
+        }
+
+
+
+        const game = new Phaser.Game(config);
+
+        function preload() {
+            this.load.image('ground', 'https://labs.phaser.io/assets/sprites/platform.png');
+            this.load.image('player', 'https://labs.phaser.io/assets/sprites/phaser-dude.png');
+            this.load.image('spike', 'https://labs.phaser.io/assets/sprites/red_ball.png');
+            this.load.image('door', 'https://labs.phaser.io/assets/sprites/exit.png');
+            this.load.image('water', 'https://labs.phaser.io/assets/sprites/water.png'); // For water fill effect
+            this.load.image('explosion', 'https://labs.phaser.io/assets/particles/yellow.png');
+            this.load.audio('boom', 'https://labs.phaser.io/assets/audio/SoundEffects/explosion.mp3');
+            this.load.image('explosion', 'https://labs.phaser.io/assets/particles/yellow.png');
+
+            this.load.audio('blip', 'https://labs.phaser.io/assets/audio/SoundEffects/blip.wav');
+        }
+
+        function create() {
+
+            if (this.waterFill) {
+                this.waterFill.clear();
+                this.waterFill.destroy();
+            }
+
+
+            if (this.tunnelOverlay) {
+                this.tunnelOverlay.destroy();
+            }
+
+            this.tunnelOverlay = null;
+            this.tunnelTriggered = false;
+
+            this.tunnelBlock = this.physics.add.staticImage(690, groundHeight, 'ground')
+                .setDisplaySize(100, 60)      // half-height so it looks like a thinner tile
+                .refreshBody();
+
+            trapTriggered = false;
+            this.obstaclesSpawned = false;
+
+
+
+            const ground = this.physics.add.staticGroup();
+
+            ground.create(320, groundHeight, 'ground').setDisplaySize(640, 60).refreshBody();
+            ground.create(770, groundHeight, 'ground').setDisplaySize(60, 60).refreshBody();
+
+
+            // Player
+            player = this.physics.add.sprite(100, playerBase, 'player');
+            player.setCollideWorldBounds(true);
+            player.body.moves = true;
+
+            this.physics.add.collider(player, ground);
+
+            // Controls
+            cursors = this.input.keyboard.createCursorKeys();
+
+            // Initial spikes (obstacles)
+            obstacles = this.physics.add.staticGroup();
+            obstacles.create(400, 350, 'spike');
+            obstacles.create(450, 350, 'spike');
+
+            this.physics.add.collider(player, obstacles, () => {
+                this.scene.restart();
+            });
+
+            // Followers group
+            followers = this.physics.add.group();
+
+            this.physics.add.collider(player, followers, (player, spike) => {
+                // Camera shake
+                this.cameras.main.zoomTo(1.2, 100);
+                this.cameras.main.shake(250, 0.01);
+
+
+                // Explosion particles
+                this.add.particles('explosion', {
+                    x: player.x,
+                    y: player.y,
+                    speed: { min: -100, max: 100 },
+                    scale: { start: 0.5, end: 0 },
+                    lifespan: 300,
+                    quantity: 20
+                });
+
+
+                // Red screen flash
+                // const flash = this.add.rectangle(400, 200, 800, 400, 0xff0000, 0.3).setDepth(100);
+                // this.tweens.add({
+                //     targets: flash,
+                //     alpha: 0,
+                //     duration: 200,
+                //     ease: 'Power2',
+                //     onComplete: () => flash.destroy()
+                // });
+
+                // Play explosion sound
+                // this.sound.play('boom');
+                // this.sound.play('blip');
+
+                // Slow motion effect
+                this.time.timeScale = 0.3; // slow down everything
+                this.physics.world.timeScale = 0.3;
+
+                // Hide player
+                player.setVisible(false);
+                player.setActive(false);
+
+                spike.setVisible(false);
+                spike.setActive(false);
+
+                // Restart after a delay and reset timeScale
+                this.time.delayedCall(300, () => {
+                    this.cameras.main.zoomTo(1, 200);
+                    this.time.timeScale = 1;
+                    this.physics.world.timeScale = 1;
+                    // this.scene.restart();
+                    gameOver.call(this);
+
+                });
+            });
+
+            // Door
+            door = this.physics.add.staticImage(750, doorY, 'door');
+
+            this.physics.add.overlap(player, door, () => {
+                if (!trapTriggered) {
+                    alert('🎉 You Win!');
+                    this.scene.restart();
+                }
+            });
+
+            // Make follower collide with ground
+            this.physics.add.collider(followers, ground);
+
+            this.tunnelTrigger = this.add.zone(690, groundHeight, 100, 60); // match the block size
+            this.physics.world.enable(this.tunnelTrigger);
+            this.tunnelTrigger.body.setAllowGravity(false);
+            this.tunnelTrigger.body.moves = false;
+
+            // 3. Detect player entering trigger
+            // this.physics.add.overlap(player, tunnelTrigger, openTunnel, null, this);
+            this.physics.add.overlap(player, this.tunnelTrigger, () => {
+                if (!this.tunnelTriggered) {
+                    this.tunnelTriggered = true;
+                    console.log('this.tunnelTriggered')
+                    openTunnel.call(this);
+                }
+            });
+
+
+
+            /// water fill
+
+            this.waterFill = this.add.graphics();
+            this.waterFillDepth = 50;
+            this.waterFill.setDepth(this.waterFillDepth);
+
+            this.waterLevel = 0;               // Current fill height
+            this.waterMaxHeight = this.tunnelBlock.displayHeight * 0.6;          // 50% water
+            this.waterX = this.tunnelBlock.x - this.tunnelBlock.displayWidth / 2;
+            this.waterY = this.tunnelBlock.y + this.tunnelBlock.displayHeight / 2;
+
+            this.waveAmplitude = 5;           // Height of the wave peaks
+            this.waveLength = 30;             // Distance between peaks
+            this.waveSpeed = 0.1;             // Speed of wave movement
+            this.waveOffset = 0;              // Phase shift, will update in update()
+
+        }
+
+
+        function gameOver() {
+            this.physics.pause();
+            player.setTint(0xff0000);
+            player.setVelocity(0, 0);
+
+            const overlay = this.add.rectangle(400, 200, 800, 400, 0x000000, 0).setDepth(100);
+
+            const gameOverText = this.add.text(400, 150, 'GAME OVER', {
+                fontSize: '64px',
+                fill: '#ff0000',
+                fontFamily: 'Arial',
+                fontWeight: 'bold'
+            }).setOrigin(0.5).setDepth(101);
+
+            const restartText = this.add.text(400, 280, 'Click to Restart', {
+                fontSize: '32px',
+                fill: '#ffffff',
+                fontFamily: 'Arial'
+            }).setOrigin(0.5).setDepth(101).setInteractive();
+
+            restartText.on('pointerdown', () => {
+                this.scene.restart();
+            });
+
+            // Animate overlay fade-in
+            this.tweens.add({
+                targets: overlay,
+                alpha: 0.6,
+                duration: 500,
+                ease: 'Power2'
+            });
+
+            // Animate text scale + fade-in
+            gameOverText.setScale(0);
+            this.tweens.add({
+                targets: gameOverText,
+                alpha: { from: 0, to: 1 },
+                scale: { from: 0, to: 1 },
+                duration: 800,
+                ease: 'Back.Out'
+            });
+
+            // Animate restart text fade-in with delay
+            restartText.setAlpha(0);
+            this.tweens.add({
+                targets: restartText,
+                alpha: 1,
+                duration: 500,
+                delay: 800
+            });
+        }
+
+
+        function openTunnel() {
+            this.controlsEnabled = false;
+            this.tweens.add({
+                targets: this.tunnelBlock,
+                alpha: 0,
+                duration: 1000,
+                onComplete: () => {
+                    this.physics.world.disable(this.tunnelBlock); // remove physics
+                    this.tunnelBlock.destroy(); // remove from scene
+
+                    // Make player fall
+                    player.setVelocityX(0);
+                    player.setVelocityY(300);
+
+                    this.time.delayedCall(2000, () => {
+                        alert('You fell into the trap!');
+                        // this.scene.restart();
+                    });
+
+                }
+            });
+        }
+
+        function update() {
+            if (trapTriggered) {
+                player.setVelocityX(0); // freeze player movement during trap
+                return;
+            }
+
+            // Player movement
+            if (cursors.left.isDown) {
+                player.setVelocityX(-160);
+            } else if (cursors.right.isDown) {
+                player.setVelocityX(160);
+            } else {
+                player.setVelocityX(0);
+            }
+            if (cursors.up.isDown && player.body.touching.down) {
+                player.setVelocityY(-350);
+            }
+
+            // Dynamic obstacle spawning near door when player crosses x=600
+            if (!this.obstaclesSpawned && player.x > 600) {
+                // spawnObstacles.call(this);
+                spawnObstacles(3, player.x - 100);
+                this.obstaclesSpawned = true;
+            }
+
+            if (Phaser.Math.Distance.Between(player.x, player.y, door.x, door.y) < minDistance && !this.doorMovedRecently) {
+                const pos = getRandomDoorPosition(player.x, player.y, minDistance);
+                door.setPosition(pos.x, pos.y);
+                door.body.updateFromGameObject();
+
+                // Blink effect to hint the new door position
+                this.tweens.add({
+                    targets: door,
+                    alpha: 0,
+                    duration: 150,
+                    yoyo: true,
+                    repeat: 3
+                });
+
+                // Play a sound effect when door teleports (if loaded)
+                // if (this.sound) this.sound.play('blip');
+
+                this.doorMovedRecently = true;
+
+                // Reset flag after 1 second (adjust timing)
+                this.time.delayedCall(1000, () => {
+                    this.doorMovedRecently = false;
+                });
+            }
+
+            // Follower logic
+            followers.children.iterate((spike) => {
+                if (!spike) return;
+
+                // Move toward player
+                if (player.x > spike.x) {
+                    spike.setVelocityX(80);  // You can increase speed if you like
+                } else if (player.x < spike.x) {
+                    spike.setVelocityX(-80);
+                } else {
+                    spike.setVelocityX(0);
+                }
+
+                // Jump if player jumps and spike is close and on the ground
+                const distanceX = Math.abs(player.x - spike.x);
+                if (
+                    distanceX < 100 &&
+                    player.body.velocity.y < 0 &&       // player is jumping upward
+                    spike.body.blocked.down             // follower is on ground
+                ) {
+                    spike.setVelocityY(-350);           // Make spike jump
+                }
+            });
+
+            if (
+                Phaser.Geom.Intersects.RectangleToRectangle(player.getBounds(), door.getBounds()) ||
+                (player.x > door.x - door.width / 2 && player.x < door.x + door.width / 2 && player.y < door.y)
+            ) {
+                // Player is horizontally near door and vertically above it
+                alert('🎉 You Win!');
+                this.scene.restart();
+            }
+
+
+
+            if (this.tunnelTriggered) {
+                if (this.waterLevel < this.waterMaxHeight) {
+                    this.waterLevel += 1; // speed of fill, adjust as needed
+                }
+
+                this.waterFill.clear();
+                this.waterFill.fillStyle(0x0000ff, 0.5);
+
+                let points = [];
+
+                // Bottom-left corner
+                points.push(new Phaser.Geom.Point(this.waterX, this.waterY));
+
+                // Bottom-right corner
+                points.push(new Phaser.Geom.Point(this.waterX + this.tunnelBlock.displayWidth, this.waterY));
+
+                // Create wave points along the top edge from right to left
+                for (let x = this.waterX + this.tunnelBlock.displayWidth; x >= this.waterX; x -= 5) {
+                    let relativeX = x - this.waterX;
+                    let y = this.waterY - this.waterLevel + Math.sin((relativeX / this.waveLength) + this.waveOffset) * this.waveAmplitude;
+                    points.push(new Phaser.Geom.Point(x, y));
+                }
+
+                // Close shape by adding top-left corner
+                points.push(new Phaser.Geom.Point(this.waterX, this.waterY - this.waterLevel));
+
+                // Draw the shape with wave top
+                this.waterFill.fillPoints(points, true);
+
+                // Update wave offset for animation
+                this.waveOffset += this.waveSpeed;
+            }
+
+
+
+        }
+
+        function spawnObstacles(count, x) {
+            for (let i = 0; i < count; i++) {
+                let follower = followers.create((x || 350) + i, playerBase, 'spike');
+                follower.setBounce(0);                     // No bounce
+
+                follower.setImmovable(false);
+                follower.setVelocityX(0);
+                follower.setCollideWorldBounds(true);      // Stay inside world
+                follower.body.setAllowGravity(true);
+
+            }
+        }
+
+    </script>
+
+</body>
+
+</html>

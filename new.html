@@ -1,0 +1,508 @@
+<!-- <!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Horizontal Platformer</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.js"></script>
+    <style>
+        body {
+            margin: 0;
+        }
+
+        canvas {
+            display: block;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+
+<body>
+
+    <script>
+        const config = {
+            type: Phaser.AUTO,
+            width: 800,
+            height: 400,
+            physics: {
+                default: 'arcade',
+                arcade: {
+                    gravity: { y: 600 },
+                    debug: false
+                }
+            },
+            scene: {
+                preload,
+                create,
+                update
+            }
+        };
+
+        let player;
+        let cursors;
+        let door;
+
+        const game = new Phaser.Game(config);
+
+        function preload() {
+            // Use basic shapes as placeholders
+            this.load.image('ground', 'https://labs.phaser.io/assets/sprites/platform.png');
+            this.load.image('player', 'https://labs.phaser.io/assets/sprites/phaser-dude.png');
+            this.load.image('spike', 'https://labs.phaser.io/assets/sprites/red_ball.png');
+            this.load.image('door', 'https://labs.phaser.io/assets/sprites/exit.png');
+            // this.load.spritesheet('grass', 'path/to/grass-spritesheet.png', { frameWidth: 32, frameHeight: 32 });
+        }
+
+        function create() {
+            // Add ground/platform
+            //   const platforms = this.physics.add.staticGroup();
+            //   platforms.create(400, 390, 'ground').setScale(2).refreshBody();
+            // this.add.rectangle(400, 370, 800, 60, 0x225533).setDepth(-1);
+            const graphics = this.add.graphics();
+
+            // Fill with brown color
+            graphics.fillStyle(0x654321, 1);
+
+            // Draw rectangle (x, y, width, height)
+            graphics.fillRect(0, 360, 800, 40);
+            // Create an invisible static physics body for ground
+            const groundBody = this.physics.add.staticGroup();
+
+            groundBody.create(400, 380)  // physics body positioned at center of rectangle
+                .setDisplaySize(800, 40)   // size matches drawn rectangle
+                .refreshBody()             // important to update physics body size
+                .setVisible(false);        // hide physics sprite
+
+
+            // Player
+            player = this.physics.add.sprite(100, 330, 'player');
+            player.setCollideWorldBounds(true);
+
+            this.physics.add.collider(player, groundBody);
+
+            // Player collision with ground
+            //   this.physics.add.collider(player, platforms);
+
+            // Moving obstacle (spike)
+            const spike = this.physics.add.image(400, 350, 'spike');;
+spike.setImmovable(true);
+spike.body.allowGravity = false;
+
+            this.tweens.add({
+                targets: spike,
+                x: 550,
+                duration: 2000,
+                yoyo: true,
+                repeat: -1
+            });
+
+            this.physics.add.collider(player, spike, () => {
+                this.scene.restart(); // restart on hit
+            });
+
+            // Door
+            door = this.physics.add.staticImage(750, 350, 'door');
+
+
+            this.physics.add.overlap(player, door, () => {
+                alert('🎉 You Win!');
+                this.scene.restart();
+            });
+
+            // this.anims.create({
+            //     key: 'wave',
+            //     frames: this.anims.generateFrameNumbers('grass', { start: 0, end: 3 }),
+            //     frameRate: 6,
+            //     repeat: -1
+            // });
+
+            // const wavingGrass = this.add.sprite(200, 340, 'grass').setScale(2);
+            // wavingGrass.play('wave');
+
+
+            // Controls
+            cursors = this.input.keyboard.createCursorKeys();
+        }
+
+        function update() {
+            if (cursors.left.isDown) {
+                player.setVelocityX(-160);
+            } else if (cursors.right.isDown) {
+                player.setVelocityX(160);
+            } else {
+                player.setVelocityX(0);
+            }
+
+            if (cursors.up.isDown && player.body.touching.down) {
+                player.setVelocityY(-350); // jump force
+            }
+
+        }
+    </script>
+
+</body>
+
+</html> -->
+
+
+
+
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Phaser Platformer with Trap</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.js"></script>
+    <style>
+        body {
+            margin: 0;
+        }
+
+        canvas {
+            display: block;
+            margin: 0 auto;
+            background: #87ceeb;
+        }
+    </style>
+</head>
+
+<body>
+
+    <script>
+        const config = {
+            type: Phaser.AUTO,
+            width: 800,
+            height: 400,
+            physics: {
+                default: 'arcade',
+                arcade: {
+                    gravity: { y: 600 },
+                    debug: false
+                }
+            },
+            scene: {
+                preload,
+                create,
+                update
+            }
+        };
+
+        let player, cursors, door;
+        let obstacles, followers;
+        let honeyTrapZone;
+        let trapTriggered = false;
+        let waterFill;
+
+        const game = new Phaser.Game(config);
+
+        function preload() {
+            this.load.image('ground', 'https://labs.phaser.io/assets/sprites/platform.png');
+            this.load.image('player', 'https://labs.phaser.io/assets/sprites/phaser-dude.png');
+            this.load.image('spike', 'https://labs.phaser.io/assets/sprites/red_ball.png');
+            this.load.image('door', 'https://labs.phaser.io/assets/sprites/exit.png');
+            this.load.image('water', 'https://labs.phaser.io/assets/sprites/water.png'); // For water fill effect
+            this.load.image('explosion', 'https://labs.phaser.io/assets/particles/yellow.png');
+            this.load.audio('boom', 'https://labs.phaser.io/assets/audio/SoundEffects/explosion.mp3');
+            this.load.image('explosion', 'https://labs.phaser.io/assets/particles/yellow.png');
+
+            this.load.audio('blip', 'https://labs.phaser.io/assets/audio/SoundEffects/blip.wav');
+        }
+
+        function create() {
+
+            this.tunnelBlock = this.physics.add.staticImage(720, 380, 'ground')
+                .setDisplaySize(60, 20)      // half-height so it looks like a thinner tile
+                .refreshBody()
+                // .setAlpha(1)            // fully visible
+                .setTint(0xff0000);     // tint it red so it's very clear it's the tunnel
+            //                   .setDisplaySize(60, 30)           // make it smaller to look like a tile
+            //   .refreshBody()
+            //   .setTint(0x00ffff);               // cyan tint so it's visually distinct
+
+
+
+            trapTriggered = false;
+            this.obstaclesSpawned = false;
+
+
+
+            // Ground
+            const ground = this.physics.add.staticGroup();
+            ground.create(400, 380, 'ground').setDisplaySize(800, 40).refreshBody();
+
+            // Player
+            player = this.physics.add.sprite(100, 330, 'player');
+            player.setCollideWorldBounds(true);
+            player.body.moves = true;
+
+            this.physics.add.collider(player, ground);
+
+            // Controls
+            cursors = this.input.keyboard.createCursorKeys();
+
+            // Initial spikes (obstacles)
+            obstacles = this.physics.add.staticGroup();
+            obstacles.create(400, 350, 'spike');
+            obstacles.create(450, 350, 'spike');
+
+            this.physics.add.collider(player, obstacles, () => {
+                this.scene.restart();
+            });
+
+            // Followers group
+            followers = this.physics.add.group();
+
+            this.physics.add.collider(player, followers, (player, spike) => {
+                // Camera shake
+                this.cameras.main.shake(250, 0.01);
+
+                // Explosion particles
+                this.add.particles('explosion', {
+                    x: player.x,
+                    y: player.y,
+                    speed: { min: -100, max: 100 },
+                    scale: { start: 0.5, end: 0 },
+                    lifespan: 600,
+                    quantity: 20
+                });
+
+                // Red screen flash
+                const flash = this.add.rectangle(400, 200, 800, 400, 0xff0000, 0.3).setDepth(100);
+                this.tweens.add({
+                    targets: flash,
+                    alpha: 0,
+                    duration: 500,
+                    ease: 'Power2',
+                    onComplete: () => flash.destroy()
+                });
+
+                // Play explosion sound
+                this.sound.play('boom');
+                // this.sound.play('blip');
+
+                // Slow motion effect
+                this.time.timeScale = 0.3; // slow down everything
+                this.physics.world.timeScale = 0.3;
+
+                // Hide player
+                player.setVisible(false);
+                player.setActive(false);
+
+                // Restart after a delay and reset timeScale
+                this.time.delayedCall(1200, () => {
+                    this.time.timeScale = 1;
+                    this.physics.world.timeScale = 1;
+                    this.scene.restart();
+                });
+            });
+
+            // Door
+            door = this.physics.add.staticImage(750, 330, 'door');
+
+            //             door.setSize(door.width, door.height + 50);  // increase height by 50 pixels
+            // door.setOffset(0, -50);                       // move hitbox upward
+
+            this.physics.add.overlap(player, door, () => {
+                if (!trapTriggered) {
+                    alert('🎉 You Win!');
+                    this.scene.restart();
+                }
+            });
+
+            // Honey trap zone - invisible rectangle in front of door
+            // honeyTrapZone = this.add.zone(700, 350, 80, 40);
+            // this.physics.world.enable(honeyTrapZone);
+            // honeyTrapZone.body.setAllowGravity(false);
+            // honeyTrapZone.body.setImmovable(true);
+
+            // this.physics.add.overlap(player, honeyTrapZone, () => {
+            //     if (!trapTriggered) {
+            //         triggerHoneyTrap.call(this);
+            //     }
+            // });
+
+
+
+            // Water fill rectangle (initially invisible)
+            // waterFill = this.add.rectangle(door.x, 400, 80, 0, 0x1e90ff, 0.7).setOrigin(0.5, 1);
+            // waterFill.setSize(80, 0);
+            // waterFill.setPosition(door.x, 400);
+
+
+
+            // Make follower collide with ground
+            this.physics.add.collider(followers, ground);
+            // Enable gravity
+
+
+            // 1. Create tunnel (initially closed)
+            // tunnel = this.physics.add.staticGroup();
+            // let tunnelBlock = tunnel.create(740, 380, 'ground').setScale(1, 0.5).refreshBody(); // closed ground
+            this.tunnelTrigger = this.add.zone(740, 370, 60, 40); // match the block size
+            this.physics.world.enable(this.tunnelTrigger);
+            this.tunnelTrigger.body.setAllowGravity(false);
+            this.tunnelTrigger.body.moves = false;
+
+
+            // 3. Detect player entering trigger
+            // this.physics.add.overlap(player, tunnelTrigger, openTunnel, null, this);
+            this.physics.add.overlap(player, this.tunnelTrigger, () => {
+                if (!this.tunnelTriggered) {
+                    this.tunnelTriggered = true;
+                    console.log('this.tunnelTriggered')
+                    openTunnel.call(this);
+                }
+            });
+
+
+
+        }
+
+        function openTunnel() {
+            this.controlsEnabled = false; // disable controls
+
+            this.tweens.add({
+                targets: this.tunnelBlock,
+                alpha: 0,
+                duration: 1000,
+                onComplete: () => {
+                    // this.tunnelBlock.destroy();  // remove block from scene
+
+                    // // make player fall
+                    // player.setVelocityX(0);
+                    // player.setVelocityY(300);
+
+                    // // after delay show message and restart
+                    // this.time.delayedCall(2000, () => {
+                    //     alert('You fell into the trap!');
+                    //     this.scene.restart();
+                    // });
+
+                    // Disable physics before destroying
+                    this.physics.world.disable(this.tunnelBlock);
+                    this.tunnelBlock.destroy();  // remove block from scene
+
+                    // make player fall
+                    player.setVelocityX(0);
+                    player.setVelocityY(300);
+
+                    // after delay show message and restart
+                    this.time.delayedCall(2000, () => {
+                        alert('You fell into the trap!');
+                        this.scene.restart();
+                    });
+
+                }
+            });
+        }
+
+
+
+        function update() {
+            if (trapTriggered) {
+                player.setVelocityX(0); // freeze player movement during trap
+                return;
+            }
+
+            // Player movement
+            if (cursors.left.isDown) {
+                player.setVelocityX(-160);
+            } else if (cursors.right.isDown) {
+                player.setVelocityX(160);
+            } else {
+                player.setVelocityX(0);
+            }
+            if (cursors.up.isDown && player.body.touching.down) {
+                player.setVelocityY(-350);
+            }
+
+            // Dynamic obstacle spawning near door when player crosses x=600
+            if (!this.obstaclesSpawned && player.x > 600) {
+                // spawnObstacles.call(this);
+                this.obstaclesSpawned = true;
+            }
+
+            // Follower logic
+            followers.children.iterate((spike) => {
+                if (!spike) return;
+
+                // Move toward player
+                if (player.x > spike.x) {
+                    spike.setVelocityX(80);  // You can increase speed if you like
+                } else if (player.x < spike.x) {
+                    spike.setVelocityX(-80);
+                } else {
+                    spike.setVelocityX(0);
+                }
+
+                // Jump if player jumps and spike is close and on the ground
+                const distanceX = Math.abs(player.x - spike.x);
+                if (
+                    distanceX < 100 &&
+                    player.body.velocity.y < 0 &&       // player is jumping upward
+                    spike.body.blocked.down             // follower is on ground
+                ) {
+                    spike.setVelocityY(-350);           // Make spike jump
+                }
+            });
+
+            if (
+                Phaser.Geom.Intersects.RectangleToRectangle(player.getBounds(), door.getBounds()) ||
+                (player.x > door.x - door.width / 2 && player.x < door.x + door.width / 2 && player.y < door.y)
+            ) {
+                // Player is horizontally near door and vertically above it
+                alert('🎉 You Win!');
+                this.scene.restart();
+            }
+
+
+        }
+
+        function spawnObstacles() {
+            // Add static blocking spikes near door
+            // Add a follower spike that chases player
+            let follower = followers.create(650, 330, 'spike');
+            follower.setBounce(0);                     // No bounce
+
+            follower.setImmovable(false);
+            follower.setVelocityX(0);
+            follower.setCollideWorldBounds(true);      // Stay inside world
+            follower.body.setAllowGravity(true);
+
+
+        }
+
+        function triggerHoneyTrap() {
+            return;
+            trapTriggered = true;
+
+            // Make door fall (disappear)
+            door.destroy();
+
+            // Freeze player and trap him
+            player.setVelocity(0, 0);
+            player.body.moves = false;
+
+            // Animate water fill over 4 seconds
+            this.tweens.add({
+                targets: waterFill,
+                height: 80,
+                duration: 4000,
+                ease: 'Linear',
+                onComplete: () => {
+                    // Restart scene AFTER tween finishes
+                    this.scene.restart();
+
+                    // Show message after a short delay (non-blocking)
+                    this.time.delayedCall(500, () => {
+                        alert("💧 You drowned! Try again.");
+                    });
+                }
+            });
+        }
+    </script>
+
+</body>
+
+</html>
