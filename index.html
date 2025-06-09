@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html>
 
 <head>
@@ -20,12 +21,19 @@
 </head>
 
 <body>
+    <div id="game-container"></div>
 
     <script>
         const config = {
             type: Phaser.AUTO,
             width: 800,
             height: 400,
+            // scale: {
+            //     mode: Phaser.Scale.FIT,        // Fit the game to the screen
+            //     autoCenter: Phaser.Scale.CENTER_BOTH, // Center it on screen
+            //     parent: 'game-container'       // Optional, use if you have a container div
+            // },
+
             physics: {
                 default: 'arcade',
                 arcade: {
@@ -57,6 +65,7 @@
 
         const minDistance = 150;
 
+        const dpadSize = 48;
 
         function getRandomDoorPosition(playerX, playerY, minDistance, attempts = 50) {
             let spawnZoneXMin, spawnZoneXMax;
@@ -115,8 +124,74 @@
             this.load.audio('blip', 'https://labs.phaser.io/assets/audio/SoundEffects/blip.wav');
         }
 
+        function initDpad() {
+
+            const screenW = this.scale.width;
+            const screenH = this.scale.height;
+
+            this.inputFlags = {
+                left: false,
+                right: false,
+                up: false
+            };
+
+            // Create left button
+            const leftZone = this.add.rectangle(70, screenH - 60, 60, 60, 0x000000, 0.5)
+                .setInteractive()
+                .setScrollFactor(0)
+                .setDepth(10);
+
+            this.add.text(60, screenH - 75, '<', { fontSize: '32px', color: '#ffffff' })
+                .setScrollFactor(0)
+                .setDepth(11);
+
+            // Right button
+            const rightZone = this.add.rectangle(150, screenH - 60, 60, 60, 0x000000, 0.5)
+                .setInteractive()
+                .setScrollFactor(0)
+                .setDepth(10);
+
+            this.add.text(140, screenH - 75, '>', { fontSize: '32px', color: '#ffffff' })
+                .setScrollFactor(0)
+                .setDepth(11);
+
+            // Jump button
+            const upZone = this.add.rectangle(screenW - 70, screenH - 60, 60, 60, 0x000000, 0.5)
+                .setInteractive()
+                .setScrollFactor(0)
+                .setDepth(10);
+
+            this.add.text(screenW - 80, screenH - 75, '^', { fontSize: '32px', color: '#ffffff' })
+                .setScrollFactor(0)
+                .setDepth(11);
+
+
+            // Input flags
+            this.inputFlags = { left: false, right: false, up: false };
+
+            // Set event handlers
+            leftZone.on('pointerdown', () => this.inputFlags.left = true);
+            leftZone.on('pointerup', () => this.inputFlags.left = false);
+            leftZone.on('pointerout', () => this.inputFlags.left = false);
+
+            rightZone.on('pointerdown', () => this.inputFlags.right = true);
+            rightZone.on('pointerup', () => this.inputFlags.right = false);
+            rightZone.on('pointerout', () => this.inputFlags.right = false);
+
+            upZone.on('pointerdown', () => this.inputFlags.up = true);
+            upZone.on('pointerup', () => this.inputFlags.up = false);
+            upZone.on('pointerout', () => this.inputFlags.up = false);
+
+
+        }
+
+
         function create() {
 
+
+            initDpad.call(this);
+
+            // initDpad();
             if (this.waterFill) {
                 this.waterFill.clear();
                 this.waterFill.destroy();
@@ -183,20 +258,6 @@
                     quantity: 20
                 });
 
-
-                // Red screen flash
-                // const flash = this.add.rectangle(400, 200, 800, 400, 0xff0000, 0.3).setDepth(100);
-                // this.tweens.add({
-                //     targets: flash,
-                //     alpha: 0,
-                //     duration: 200,
-                //     ease: 'Power2',
-                //     onComplete: () => flash.destroy()
-                // });
-
-                // Play explosion sound
-                // this.sound.play('boom');
-                // this.sound.play('blip');
 
                 // Slow motion effect
                 this.time.timeScale = 0.3; // slow down everything
@@ -346,20 +407,25 @@
         }
 
         function update() {
+
+            const moveLeft = cursors.left.isDown || this.inputFlags.left;
+            const moveRight = cursors.right.isDown || this.inputFlags.right;
+            const jump = (cursors.up.isDown || this.inputFlags.up) && player.body.touching.down;
+
             if (trapTriggered) {
                 player.setVelocityX(0); // freeze player movement during trap
                 return;
             }
 
             // Player movement
-            if (cursors.left.isDown) {
+            if (moveLeft) {
                 player.setVelocityX(-160);
-            } else if (cursors.right.isDown) {
+            } else if (moveRight) {
                 player.setVelocityX(160);
             } else {
                 player.setVelocityX(0);
             }
-            if (cursors.up.isDown && player.body.touching.down) {
+            if (jump) {
                 player.setVelocityY(-350);
             }
 
@@ -371,8 +437,10 @@
             }
 
             if (Phaser.Math.Distance.Between(player.x, player.y, door.x, door.y) < minDistance && !this.doorMovedRecently) {
+                console.log('Distance to door:', Phaser.Math.Distance.Between(player.x, player.y, door.x, door.y));
                 const pos = getRandomDoorPosition(player.x, player.y, minDistance);
-                door.setPosition(pos.x, pos.y);
+                // door.setPosition(pos.x, pos.y);
+                door.setX(pos.x);
                 door.body.updateFromGameObject();
 
                 // Blink effect to hint the new door position
@@ -462,9 +530,6 @@
                 // Update wave offset for animation
                 this.waveOffset += this.waveSpeed;
             }
-
-
-
         }
 
         function spawnObstacles(count, x) {
