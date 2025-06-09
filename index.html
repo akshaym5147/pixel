@@ -45,7 +45,10 @@
                 preload,
                 create,
                 update
-            }
+            },
+             input: {
+    activePointers: 3  // allow 3 simultaneous touches
+  },
         };
         let groundHeight = 380; // 380
         let playerBase = 330; // 330;
@@ -172,15 +175,19 @@
             // Set event handlers
             leftZone.on('pointerdown', () => this.inputFlags.left = true);
             leftZone.on('pointerup', () => this.inputFlags.left = false);
-            leftZone.on('pointerout', () => this.inputFlags.left = false);
+            leftZone.on('pointerout', () => this.inputFlags.left = false)
+            .on('pointerupoutside', () => this.inputFlags.left = false);
 
             rightZone.on('pointerdown', () => this.inputFlags.right = true);
             rightZone.on('pointerup', () => this.inputFlags.right = false);
-            rightZone.on('pointerout', () => this.inputFlags.right = false);
+            rightZone.on('pointerout', () => this.inputFlags.right = false)
+            .on('pointerupoutside', () => this.inputFlags.right = false);
 
             upZone.on('pointerdown', () => this.inputFlags.up = true);
             upZone.on('pointerup', () => this.inputFlags.up = false);
-            upZone.on('pointerout', () => this.inputFlags.up = false);
+            upZone.on('pointerout', () => this.inputFlags.up = false)
+              .on('pointerupoutside', () => this.inputFlags.up = false);
+
 
 
         }
