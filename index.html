@@ -185,6 +185,9 @@
 
         }
 
+        function addSoundButton(params) {
+            
+        }
 
         function create() {
 
@@ -257,6 +260,8 @@
                     lifespan: 300,
                     quantity: 20
                 });
+
+                if (this.sound) this.sound.play('boom');
 
 
                 // Slow motion effect
