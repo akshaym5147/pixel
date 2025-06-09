@@ -46,9 +46,15 @@
                 create,
                 update
             },
-             input: {
-    activePointers: 3  // allow 3 simultaneous touches
-  },
+            input: {
+                activePointers: 3  // allow 3 simultaneous touches
+            },
+
+            scale: {
+                mode: Phaser.Scale.RESIZE,
+                autoCenter: Phaser.Scale.CENTER_BOTH
+            },
+
         };
         let groundHeight = 380; // 380
         let playerBase = 330; // 330;
@@ -176,27 +182,57 @@
             leftZone.on('pointerdown', () => this.inputFlags.left = true);
             leftZone.on('pointerup', () => this.inputFlags.left = false);
             leftZone.on('pointerout', () => this.inputFlags.left = false)
-            .on('pointerupoutside', () => this.inputFlags.left = false);
+                .on('pointerupoutside', () => this.inputFlags.left = false);
 
             rightZone.on('pointerdown', () => this.inputFlags.right = true);
             rightZone.on('pointerup', () => this.inputFlags.right = false);
             rightZone.on('pointerout', () => this.inputFlags.right = false)
-            .on('pointerupoutside', () => this.inputFlags.right = false);
+                .on('pointerupoutside', () => this.inputFlags.right = false);
 
             upZone.on('pointerdown', () => this.inputFlags.up = true);
             upZone.on('pointerup', () => this.inputFlags.up = false);
             upZone.on('pointerout', () => this.inputFlags.up = false)
-              .on('pointerupoutside', () => this.inputFlags.up = false);
+                .on('pointerupoutside', () => this.inputFlags.up = false);
 
 
 
         }
 
         function addSoundButton(params) {
-            
+
         }
 
+        function handleResize() {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+
+            // Optional: detect orientation
+            if (height > width) {
+                console.log('Portrait mode');
+            } else {
+                console.log('Landscape mode');
+            }
+
+            // Adjust button positions if needed
+            this.updateDpadLayoutHandler(width, height);
+        }
+
+
+        function updateDpadLayout(width, height) {
+            // Example: reposition D-pad buttons for portrait
+            const padding = 20;
+
+            this.leftZone.setPosition(padding + 40, height - 60);
+            this.rightZone.setPosition(padding + 140, height - 60);
+            this.upZone.setPosition(width - 60, height - 140);
+        }
+
+
         function create() {
+            this.boundResizeHandler = handleResize.bind(this);
+            this.updateDpadLayoutHandler = updateDpadLayout.bind(this);
+
+            window.addEventListener('resize', this.boundResizeHandler);
 
 
             initDpad.call(this);
