@@ -50,10 +50,10 @@
                 activePointers: 3  // allow 3 simultaneous touches
             },
 
-            scale: {
-                mode: Phaser.Scale.RESIZE,
-                autoCenter: Phaser.Scale.CENTER_BOTH
-            },
+            // scale: {
+            //     mode: Phaser.Scale.RESIZE,
+            //     autoCenter: Phaser.Scale.CENTER_BOTH
+            // },
 
         };
         let groundHeight = 380; // 380
@@ -209,12 +209,13 @@
             // Optional: detect orientation
             if (height > width) {
                 console.log('Portrait mode');
+
             } else {
                 console.log('Landscape mode');
             }
 
-            // Adjust button positions if needed
             this.updateDpadLayoutHandler(width, height);
+
         }
 
 
@@ -229,10 +230,10 @@
 
 
         function create() {
-            this.boundResizeHandler = handleResize.bind(this);
-            this.updateDpadLayoutHandler = updateDpadLayout.bind(this);
+            // this.boundResizeHandler = handleResize.bind(this);
+            // this.updateDpadLayoutHandler = updateDpadLayout.bind(this);
 
-            window.addEventListener('resize', this.boundResizeHandler);
+            // window.addEventListener('resize', this.boundResizeHandler);
 
 
             initDpad.call(this);
@@ -260,10 +261,10 @@
 
 
 
-            const ground = this.physics.add.staticGroup();
+            this.ground = this.physics.add.staticGroup();
 
-            ground.create(320, groundHeight, 'ground').setDisplaySize(640, 60).refreshBody();
-            ground.create(770, groundHeight, 'ground').setDisplaySize(60, 60).refreshBody();
+            this.ground.create(320, groundHeight, 'ground').setDisplaySize(640, 60).refreshBody();
+            this.ground.create(770, groundHeight, 'ground').setDisplaySize(60, 60).refreshBody();
 
 
             // Player
@@ -271,7 +272,7 @@
             player.setCollideWorldBounds(true);
             player.body.moves = true;
 
-            this.physics.add.collider(player, ground);
+            this.physics.add.collider(player, this.ground);
 
             // Controls
             cursors = this.input.keyboard.createCursorKeys();
@@ -340,7 +341,7 @@
             });
 
             // Make follower collide with ground
-            this.physics.add.collider(followers, ground);
+            this.physics.add.collider(followers, this.ground);
 
             this.tunnelTrigger = this.add.zone(690, groundHeight, 100, 60); // match the block size
             this.physics.world.enable(this.tunnelTrigger);
